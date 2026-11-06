@@ -49,7 +49,8 @@ public class MainActivity extends Activity {
 
     private AppTheme t;
     private FrameLayout content;
-    private final TextView[] tabViews = new TextView[4];
+    private final IconView[] tabIcons = new IconView[4];
+    private final TextView[] tabLabels = new TextView[4];
     private int tab = 0;
     private String dialNumber = "";
     private String pendingCall;
@@ -75,33 +76,47 @@ public class MainActivity extends Activity {
 
         LinearLayout root = new LinearLayout(this);
         root.setOrientation(LinearLayout.VERTICAL);
-        root.setBackgroundColor(t.bg);
         root.setLayoutDirection(View.LAYOUT_DIRECTION_RTL);
 
-        TextView title = Ui.text(this, "مخاطبین و تماس", 20, t.primary);
+        TextView title = Ui.text(this, "مخاطبین و تماس", 22, t.primary);
         title.setTypeface(null, Typeface.BOLD);
-        title.setPadding(dp(16), dp(14), dp(16), dp(8));
+        Ui.glowText(title, t.primary, t);
+        title.setPadding(dp(18), dp(16), dp(18), dp(8));
         root.addView(title);
 
         content = new FrameLayout(this);
         root.addView(content, new LinearLayout.LayoutParams(MATCH, 0, 1f));
 
+        // top glow line + tab bar
+        View line = new View(this);
+        line.setBackgroundColor(Ui.alpha(t.primary, t.neon ? 150 : 50));
+        root.addView(line, new LinearLayout.LayoutParams(MATCH, Math.max(1, dp(1))));
+
         LinearLayout bar = new LinearLayout(this);
-        bar.setBackgroundColor(t.surface);
+        bar.setBackgroundColor(Ui.alpha(t.surface, 0xE6));
         String[] names = {"مخاطبین", "شماره‌گیر", "تماس‌ها", "تنظیمات"};
+        int[] icons = {IconView.CONTACTS, IconView.KEYPAD, IconView.RECENTS, IconView.SETTINGS};
         for (int i = 0; i < 4; i++) {
             final int idx = i;
-            TextView tv = Ui.text(this, names[i], 14, t.text2);
-            tv.setGravity(Gravity.CENTER);
-            tv.setPadding(0, dp(14), 0, dp(14));
-            tv.setOnClickListener(new View.OnClickListener() {
+            LinearLayout item = new LinearLayout(this);
+            item.setOrientation(LinearLayout.VERTICAL);
+            item.setGravity(Gravity.CENTER_HORIZONTAL);
+            item.setPadding(0, dp(10), 0, dp(8));
+            IconView ic = new IconView(this, icons[i], t.text2, false);
+            item.addView(ic, new LinearLayout.LayoutParams(dp(26), dp(26)));
+            TextView lb = Ui.text(this, names[i], 11, t.text2);
+            lb.setGravity(Gravity.CENTER);
+            lb.setPadding(0, dp(2), 0, 0);
+            item.addView(lb);
+            item.setOnClickListener(new View.OnClickListener() {
                 @Override
                 public void onClick(View v) {
                     showTab(idx);
                 }
             });
-            bar.addView(tv, new LinearLayout.LayoutParams(0, WRAP, 1f));
-            tabViews[i] = tv;
+            bar.addView(item, new LinearLayout.LayoutParams(0, WRAP, 1f));
+            tabIcons[i] = ic;
+            tabLabels[i] = lb;
         }
         root.addView(bar);
         setContentView(root);
@@ -130,6 +145,28 @@ public class MainActivity extends Activity {
     protected void onResume() {
         super.onResume();
         if (content != null && tab == 3) showTab(3);
+    }
+
+    @Override
+    protected void onActivityResult(int rc, int result, Intent data) {
+        super.onActivityResult(rc, result, data);
+        if (rc == 3 && result == RESULT_OK && data != null && data.getData() != null) {
+            final Uri u = data.getData();
+            new Thread(new Runnable() {
+                @Override
+                public void run() {
+                    final boolean ok = Wallpaper.save(MainActivity.this, u);
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            if (ok) recreate();
+                            else Toast.makeText(MainActivity.this, "تصویر قابل استفاده نبود",
+                                    Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                }
+            }).start();
+        }
     }
 
     private void handleIntent(Intent i) {
@@ -171,8 +208,10 @@ public class MainActivity extends Activity {
         }
         content.addView(v, new FrameLayout.LayoutParams(MATCH, MATCH));
         for (int k = 0; k < 4; k++) {
-            tabViews[k].setTextColor(k == i ? t.primary : t.text2);
-            tabViews[k].setTypeface(null, k == i ? Typeface.BOLD : Typeface.NORMAL);
+            boolean sel = k == i;
+            tabIcons[k].setStyle(sel ? t.primary : t.text2, sel && t.neon);
+            tabLabels[k].setTextColor(sel ? t.primary : t.text2);
+            tabLabels[k].setTypeface(null, sel ? Typeface.BOLD : Typeface.NORMAL);
         }
     }
 
@@ -254,16 +293,25 @@ public class MainActivity extends Activity {
         LinearLayout box = new LinearLayout(this);
         box.setOrientation(LinearLayout.VERTICAL);
 
+        LinearLayout searchBox = new LinearLayout(this);
+        searchBox.setGravity(Gravity.CENTER_VERTICAL);
+        searchBox.setPadding(dp(14), 0, dp(14), 0);
+        GradientDrawable sbg = Ui.rect(this, Ui.alpha(t.surface, 0xCC), 26);
+        sbg.setStroke(dp(1), Ui.alpha(t.primary, t.neon ? 0xB0 : 0x40));
+        searchBox.setBackground(sbg);
+        searchBox.addView(new IconView(this, IconView.SEARCH, t.primary, t.neon),
+                new LinearLayout.LayoutParams(dp(22), dp(22)));
         EditText search = new EditText(this);
         search.setHint("جستجو در مخاطبین");
         search.setHintTextColor(t.text2);
         search.setTextColor(t.text);
         search.setSingleLine(true);
-        search.setBackground(Ui.rect(this, t.surface, 24));
-        search.setPadding(dp(16), dp(10), dp(16), dp(10));
+        search.setBackground(null);
+        search.setPadding(dp(10), dp(12), dp(10), dp(12));
+        searchBox.addView(search, new LinearLayout.LayoutParams(0, WRAP, 1f));
         LinearLayout.LayoutParams sp = new LinearLayout.LayoutParams(MATCH, WRAP);
-        sp.setMargins(dp(12), dp(4), dp(12), dp(8));
-        box.addView(search, sp);
+        sp.setMargins(dp(14), dp(4), dp(14), dp(8));
+        box.addView(searchBox, sp);
 
         ListView lv = new ListView(this);
         lv.setDivider(null);
@@ -311,7 +359,8 @@ public class MainActivity extends Activity {
     }
 
     private static class ContactHolder {
-        TextView avatar, name, number, sms;
+        TextView avatar, name, number;
+        IconView sms;
     }
 
     private class ContactAdapter extends BaseAdapter {
@@ -351,10 +400,12 @@ public class MainActivity extends Activity {
                 row.setGravity(Gravity.CENTER_VERTICAL);
                 row.setPadding(dp(16), dp(8), dp(16), dp(8));
 
-                h.avatar = Ui.text(MainActivity.this, "", 18, t.onPrimary);
+                h.avatar = Ui.text(MainActivity.this, "", 18, t.primary);
+                h.avatar.setTypeface(null, Typeface.BOLD);
                 h.avatar.setGravity(Gravity.CENTER);
-                h.avatar.setBackground(Ui.circle(t.primary));
-                row.addView(h.avatar, new LinearLayout.LayoutParams(dp(44), dp(44)));
+                h.avatar.setBackground(Ui.avatarBg(MainActivity.this, t));
+                Ui.glowText(h.avatar, t.primary, t);
+                row.addView(h.avatar, new LinearLayout.LayoutParams(dp(46), dp(46)));
 
                 LinearLayout col = new LinearLayout(MainActivity.this);
                 col.setOrientation(LinearLayout.VERTICAL);
@@ -370,10 +421,10 @@ public class MainActivity extends Activity {
                 cp.setMarginStart(dp(12));
                 row.addView(col, cp);
 
-                h.sms = Ui.text(MainActivity.this, "✉", 20, t.primary);
-                h.sms.setPadding(dp(12), dp(8), dp(12), dp(8));
-                h.sms.setFocusable(false);
-                row.addView(h.sms);
+                h.sms = new IconView(MainActivity.this, IconView.CHAT, t.accent, t.neon);
+                LinearLayout.LayoutParams ip = new LinearLayout.LayoutParams(dp(26), dp(26));
+                ip.setMarginStart(dp(8));
+                row.addView(h.sms, ip);
 
                 row.setTag(h);
                 cv = row;
@@ -400,10 +451,36 @@ public class MainActivity extends Activity {
         if (dialDisplay != null) dialDisplay.setText(dialNumber);
     }
 
+    private String subFor(String k) {
+        switch (k) {
+            case "2": return "ABC";
+            case "3": return "DEF";
+            case "4": return "GHI";
+            case "5": return "JKL";
+            case "6": return "MNO";
+            case "7": return "PQRS";
+            case "8": return "TUV";
+            case "9": return "WXYZ";
+            case "0": return "+";
+            default: return "";
+        }
+    }
+
     private View keyView(final String k) {
-        TextView v = Ui.text(this, k, 28, t.text);
+        LinearLayout v = new LinearLayout(this);
+        v.setOrientation(LinearLayout.VERTICAL);
         v.setGravity(Gravity.CENTER);
-        v.setBackground(Ui.circle(t.surface));
+        v.setBackground(Ui.keyBg(this, t));
+        TextView d = Ui.text(this, k, 26, t.text);
+        d.setGravity(Gravity.CENTER);
+        Ui.glowText(d, t.primary, t);
+        v.addView(d);
+        String sub = subFor(k);
+        if (!sub.isEmpty()) {
+            TextView s = Ui.text(this, sub, 9, t.text2);
+            s.setGravity(Gravity.CENTER);
+            v.addView(s);
+        }
         v.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
@@ -425,7 +502,7 @@ public class MainActivity extends Activity {
     }
 
     private LinearLayout.LayoutParams keyLp() {
-        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(64), dp(64));
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(dp(68), dp(68));
         p.setMargins(dp(8), dp(6), dp(8), dp(6));
         return p;
     }
@@ -444,7 +521,8 @@ public class MainActivity extends Activity {
         dialDisplay.setGravity(Gravity.CENTER);
         dialDisplay.setSingleLine(true);
         dialDisplay.setEllipsize(TextUtils.TruncateAt.START);
-        dialDisplay.setMinHeight(dp(60));
+        dialDisplay.setMinHeight(dp(64));
+        Ui.glowText(dialDisplay, t.primary, t);
         box.addView(dialDisplay, new LinearLayout.LayoutParams(MATCH, WRAP));
 
         String[][] keys = {{"1", "2", "3"}, {"4", "5", "6"}, {"7", "8", "9"}, {"*", "0", "#"}};
@@ -459,9 +537,11 @@ public class MainActivity extends Activity {
         last.setGravity(Gravity.CENTER);
         last.addView(new View(this), keyLp());
 
-        TextView call = Ui.text(this, "📞", 28, Color.WHITE);
+        LinearLayout call = new LinearLayout(this);
         call.setGravity(Gravity.CENTER);
-        call.setBackground(Ui.circle(AppTheme.GREEN));
+        call.setBackground(Ui.glowButton(this, AppTheme.GREEN));
+        call.addView(new IconView(this, IconView.PHONE, Color.WHITE, false),
+                new LinearLayout.LayoutParams(dp(30), dp(30)));
         call.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -470,8 +550,10 @@ public class MainActivity extends Activity {
         });
         last.addView(call, keyLp());
 
-        TextView back = Ui.text(this, "←", 28, t.text2);
+        LinearLayout back = new LinearLayout(this);
         back.setGravity(Gravity.CENTER);
+        back.addView(new IconView(this, IconView.BACK, t.text2, false),
+                new LinearLayout.LayoutParams(dp(30), dp(30)));
         back.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -505,7 +587,8 @@ public class MainActivity extends Activity {
     }
 
     private static class RecentHolder {
-        TextView icon, title, sub;
+        IconView icon;
+        TextView title, sub;
     }
 
     private static String tail(String n) {
@@ -600,9 +683,8 @@ public class MainActivity extends Activity {
                 row.setGravity(Gravity.CENTER_VERTICAL);
                 row.setPadding(dp(16), dp(10), dp(16), dp(10));
 
-                h.icon = Ui.text(MainActivity.this, "", 22, t.text);
-                h.icon.setGravity(Gravity.CENTER);
-                row.addView(h.icon, new LinearLayout.LayoutParams(dp(36), WRAP));
+                h.icon = new IconView(MainActivity.this, IconView.PHONE, t.primary, t.neon);
+                row.addView(h.icon, new LinearLayout.LayoutParams(dp(26), dp(26)));
 
                 LinearLayout col = new LinearLayout(MainActivity.this);
                 col.setOrientation(LinearLayout.VERTICAL);
@@ -614,7 +696,7 @@ public class MainActivity extends Activity {
                 col.addView(h.title);
                 col.addView(h.sub);
                 LinearLayout.LayoutParams cp = new LinearLayout.LayoutParams(0, WRAP, 1f);
-                cp.setMarginStart(dp(8));
+                cp.setMarginStart(dp(12));
                 row.addView(col, cp);
 
                 row.setTag(h);
@@ -638,8 +720,8 @@ public class MainActivity extends Activity {
             if (r.duration > 0) {
                 sub += String.format(Locale.US, " • %d:%02d", r.duration / 60, r.duration % 60);
             }
-            h.icon.setText(r.type == 2 ? "↗" : "↙");
-            h.icon.setTextColor(missed ? AppTheme.RED : (r.type == 2 ? t.primary : AppTheme.GREEN));
+            int ic = missed ? AppTheme.RED : (r.type == 2 ? t.primary : AppTheme.GREEN);
+            h.icon.setStyle(ic, t.neon);
             h.title.setText(title);
             h.title.setTextColor(missed ? AppTheme.RED : t.text);
             h.sub.setText(sub);
@@ -652,8 +734,15 @@ public class MainActivity extends Activity {
     private TextView header(String s) {
         TextView tv = Ui.text(this, s, 16, t.primary);
         tv.setTypeface(null, Typeface.BOLD);
+        Ui.glowText(tv, t.primary, t);
         tv.setPadding(0, dp(20), 0, dp(8));
         return tv;
+    }
+
+    private LinearLayout.LayoutParams fullTop(int topDp) {
+        LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(MATCH, WRAP);
+        p.topMargin = dp(topDp);
+        return p;
     }
 
     private View buildSettings() {
@@ -662,6 +751,7 @@ public class MainActivity extends Activity {
         box.setOrientation(LinearLayout.VERTICAL);
         box.setPadding(dp(16), 0, dp(16), dp(24));
 
+        // default dialer
         box.addView(header("شماره‌گیر پیش‌فرض"));
         boolean def = isDefaultDialer();
         TextView st = Ui.text(this, def
@@ -677,9 +767,7 @@ public class MainActivity extends Activity {
                     requestDefaultDialer();
                 }
             });
-            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(MATCH, WRAP);
-            p.topMargin = dp(10);
-            box.addView(b, p);
+            box.addView(b, fullTop(10));
         }
 
         boolean missingPerm = false;
@@ -692,11 +780,42 @@ public class MainActivity extends Activity {
                     requestMissingPermissions();
                 }
             });
-            LinearLayout.LayoutParams p = new LinearLayout.LayoutParams(MATCH, WRAP);
-            p.topMargin = dp(10);
-            box.addView(b, p);
+            box.addView(b, fullTop(10));
         }
 
+        // background picture
+        box.addView(header("تصویر پس‌زمینه"));
+        box.addView(Ui.text(this,
+                "یک عکس از گالری انتخاب کنید تا پشت همه صفحه‌ها (از جمله صفحه تماس) قرار بگیرد. "
+                        + "بدون عکس، طرح نئونی یا گرادیان خود تم نمایش داده می‌شود.",
+                14, t.text2));
+        TextView pick = Ui.pill(this, "انتخاب تصویر از گالری", t.primary, t.onPrimary);
+        pick.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                try {
+                    Intent i = new Intent(Intent.ACTION_GET_CONTENT);
+                    i.setType("image/*");
+                    startActivityForResult(i, 3);
+                } catch (Exception e) {
+                    Toast.makeText(MainActivity.this, "برنامه گالری پیدا نشد", Toast.LENGTH_SHORT).show();
+                }
+            }
+        });
+        box.addView(pick, fullTop(10));
+        if (Wallpaper.exists(this)) {
+            TextView del = Ui.pill(this, "حذف تصویر پس‌زمینه", t.surface, t.text);
+            del.setOnClickListener(new View.OnClickListener() {
+                @Override
+                public void onClick(View v) {
+                    Wallpaper.delete(MainActivity.this);
+                    recreate();
+                }
+            });
+            box.addView(del, fullTop(8));
+        }
+
+        // themes
         box.addView(header("تم رنگی"));
         int cur = AppTheme.index(this);
         for (int i = 0; i < AppTheme.ALL.length; i++) {
@@ -706,13 +825,16 @@ public class MainActivity extends Activity {
             LinearLayout row = new LinearLayout(this);
             row.setGravity(Gravity.CENTER_VERTICAL);
             row.setPadding(dp(16), dp(14), dp(16), dp(14));
-            GradientDrawable bg = Ui.rect(this, th.bg, 14);
-            bg.setStroke(dp(sel ? 3 : 1), sel ? th.primary : th.text2);
+            GradientDrawable bg = new GradientDrawable(GradientDrawable.Orientation.LEFT_RIGHT,
+                    new int[]{th.bg, th.bg2});
+            bg.setCornerRadius(dp(14));
+            bg.setStroke(dp(sel ? 3 : 1), sel ? th.primary : Ui.alpha(th.text2, 0x80));
             row.setBackground(bg);
 
-            TextView nm = Ui.text(this, th.name + (sel ? "  ✓" : ""), 16, th.text);
+            TextView nm = Ui.text(this, th.name + (th.neon ? "  ✦" : "") + (sel ? "  ✓" : ""), 16, th.text);
+            Ui.glowText(nm, th.primary, th);
             row.addView(nm, new LinearLayout.LayoutParams(0, WRAP, 1f));
-            int[] sw = {th.surface, th.primary, th.text2};
+            int[] sw = {th.primary, th.accent, th.surface};
             for (int col : sw) {
                 View d = new View(this);
                 d.setBackground(Ui.circle(col));
@@ -732,6 +854,7 @@ public class MainActivity extends Activity {
             box.addView(row, rp);
         }
 
+        // text size
         box.addView(header("اندازه متن"));
         LinearLayout sizes = new LinearLayout(this);
         String[] labels = {"کوچک", "متوسط", "بزرگ", "خیلی بزرگ"};
@@ -740,7 +863,7 @@ public class MainActivity extends Activity {
             final int idx = i;
             boolean sel = curSize == i;
             TextView chip = Ui.pill(this, labels[i],
-                    sel ? t.primary : t.surface, sel ? t.onPrimary : t.text);
+                    sel ? t.primary : Ui.alpha(t.surface, 0xCC), sel ? t.onPrimary : t.text);
             chip.setPadding(dp(4), dp(10), dp(4), dp(10));
             chip.setOnClickListener(new View.OnClickListener() {
                 @Override
